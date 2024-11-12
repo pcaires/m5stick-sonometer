@@ -189,6 +189,8 @@ void init_log(){
 
 void setup_rec(){
   endserver();
+  WiFi.mode(WIFI_OFF);
+  btStop();
   init_log();
   //dispbset(1);
   //StickCP2.Display.writeCommand(TFT_DISPOFF);
