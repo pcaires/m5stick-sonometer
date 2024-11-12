@@ -28,7 +28,6 @@ static int16_t *audio_buffer;
 static char filename[17];
 
 static m5::rtc_datetime_t DATE;
-static uint8_t last_sec = 0;
 
 static uint32_t min_timer = 3;
 //static uint8_t min;
@@ -54,8 +53,7 @@ static uint8_t state = 0;
 #define ST "start" // Start string in log file
 
 
-
-void recording(){
+float grabDB(){
   if (StickCP2.Mic.isEnabled()) {
     if (StickCP2.Mic.record(audio_buffer, buffer_length, sample_rate)) {
       // Calculate RMS (Root Mean Square) for the buffer to determine dB level
@@ -66,53 +64,33 @@ void recording(){
       rms = sqrt(rms / buffer_length);
 
       // Convert RMS to decibels
-      float decibel = 20 * log10(rms);
-      uint8_t ms = millis();
-
-      File logFile = LittleFS.open(filename, FILE_APPEND);
-      logFile.write((uint8_t*)&decibel, sizeof(decibel));
-      logFile.write((uint8_t*)&ms, sizeof(ms));
-      logFile.close();
-
-      StickCP2.Power.setLed((DATE.time.seconds % 2)*10);
-
-      if (TFT_state > 0) dispdb(decibel); 
+      return 20 * log10(rms);
     }
   }
 }
 
-void dispdb(float decibel){
+
+void recording(){
+    float decibel = grabDB();
+    uint8_t ms = millis();
+
+    File logFile = LittleFS.open(filename, FILE_APPEND);
+    logFile.write((uint8_t*)&decibel, sizeof(decibel));
+    logFile.write((uint8_t*)&ms, sizeof(ms));
+    logFile.close();
+
+    if (TFT_state) dispDB(decibel);
+}
+
+void dispDB(float decibel){
       // Display the decibel value
-      StickCP2.Display.fillRect(60,60,120,120,TFT_BLACK);
-      StickCP2.Display.setCursor(60, 60);
+      StickCP2.Display.fillRect(60,65,110,20,TFT_BLACK);
+      StickCP2.Display.setCursor(60, 65);
+      StickCP2.Display.setFont(&fonts::Font4);
       StickCP2.Display.printf(" %.2f dB", decibel);
-
-      StickCP2.Display.setFont(&fonts::Font0);
-      StickCP2.Display.setCursor(10, 100);  // Position the text
-      StickCP2.Display.printf("Writing to: %s",filename);
-      StickCP2.Display.setCursor(10, 110);  // Position the text
-
-      uint8_t year    = DATE.date.year - 2000;
-      uint8_t month   = DATE.date.month;
-      uint8_t day     = DATE.date.date;
-      uint8_t hour    = DATE.time.hours;
-      uint8_t minute  = DATE.time.minutes;
-      uint8_t second  = DATE.time.seconds;
-
-      StickCP2.Display.printf("Time: %d-%d-%d %d:%d:%d\n",
-                year, month, day, hour, minute, second);
-      StickCP2.Display.setFont(&fonts::FreeSansBoldOblique12pt7b);
 }
 
 void rec_BtnA(){
-  if (StickCP2.BtnA.wasClicked()){
-
-    //Stop recording
-    StickCP2.Display.clear();
-    StickCP2.Display.drawString("Rec Done!", 120, 3);
-    delay(3000);
-    StickCP2.Power.powerOff();
-  }
 }
 
 
@@ -145,7 +123,7 @@ void menu_BtnA(){
       delay(3000);
     }
 
-    menu_disp();
+    wifiDisplay();
     
   } 
 }
@@ -161,7 +139,7 @@ void menu_BtnB(){
         delay(1000);
         StickCP2.update();
       }
-      menu_disp();
+      wifiDisplay();
     }
 }
 
@@ -211,25 +189,27 @@ void init_log(){
 
 void setup_rec(){
   endserver();
-  StickCP2.Mic.begin();
   init_log();
+  //dispbset(1);
+  //StickCP2.Display.writeCommand(TFT_DISPOFF);
 }
+
+void dispbset(const uint8_t ns){
+  TFT_state = ns;
+  dispbset();
+};
 
 // Set brightness of display based on global TFT_state
 void dispbset(){
-  uint8_t b = (TFT_state == 2) ? 255 : TFT_state;
+  uint8_t b = (TFT_state >= 2) ? 255 : TFT_state;
   StickCP2.Display.setBrightness(b);
   Serial.printf("Set brightness to %d\n",b);
 
   uint8_t lb = (TFT_state == 0) ? 10 : 0;
   StickCP2.Power.setLed(lb);
-  
 };
 
-void menu_disp(){
-  wifiDisplay();
-  dispBat();
-}
+
 
 void setup(void) {
     auto cfg = M5.config();
@@ -245,9 +225,9 @@ void setup(void) {
     audio_buffer = (int16_t*) heap_caps_malloc(buffer_length * sizeof(int16_t), MALLOC_CAP_8BIT);
     memset(audio_buffer, 0, buffer_length * sizeof(int16_t));
 
-    StickCP2.Speaker.setVolume(255);
+    //StickCP2.Speaker.setVolume(255);
     StickCP2.Speaker.end(); // Ensure speaker is off
-    StickCP2.Mic.end(); // Ensure mic is off
+    StickCP2.Mic.begin(); // Ensure mic is on
 
     i2s_config_t i2s_config = {
         .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX | I2S_MODE_PDM),
@@ -292,7 +272,7 @@ void setup(void) {
     syncRTC();
     setupwifi();
     startserver();
-    menu_disp();
+    wifiDisplay();
     //init_log();
 }
 
@@ -304,19 +284,24 @@ void loop(void) {
 
     switch (state) {
       case 0: { //menu
+        // DISPLAYS
+        dispBat();
+        dispDB(grabDB());
+        dispRTC();
+
         menu_BtnA();
         menu_BtnB();
+        delay(100);
         break;
       }
       case 1:{ // rec
-        rec_BtnA();
-        if (last_sec != DATE.time.seconds){
-          recording();
-          last_sec = DATE.time.seconds;
-        }
+        //rec_BtnA();
+        recording();
+        StickCP2.Power.setLed(0);
+        delay(900);
+        StickCP2.Power.setLed(1);
         break;
       }
     }
 
-    StickCP2.Power.lightSleep(1000);
 }
