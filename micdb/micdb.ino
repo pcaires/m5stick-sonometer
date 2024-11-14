@@ -75,8 +75,8 @@ void recording(){
     uint8_t ms = millis();
 
     File logFile = LittleFS.open(filename, FILE_APPEND);
-    logFile.write((uint8_t*)&decibel, sizeof(decibel));
-    logFile.write((uint8_t*)&ms, sizeof(ms));
+    logFile.write((uint8_t*)&decibel, sizeof(decibel)); //4bytes
+    logFile.write((uint8_t*)&ms, sizeof(ms)); //1bytes
     logFile.close();
 
     if (TFT_state) dispDB(decibel);
