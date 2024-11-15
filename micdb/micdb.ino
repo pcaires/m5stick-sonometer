@@ -47,8 +47,8 @@ static uint8_t state = 0;
 
 // Recording variables
 uint8_t last_sec;
-//float sample_sum = 0;
-//uint8_t sample_num = 0;
+float sample_sum = 0;
+uint8_t sample_num = 0;
 
 #define PIN_CLK  0
 #define PIN_DATA 34
@@ -79,12 +79,12 @@ void recording(){
     float decibel = grabDB();
     if (TFT_state) dispDB(decibel);
 
-    //sample_sum += decibel;
-    //sample_num += 1;
+    sample_sum += decibel;
+    sample_num += 1;
 
     if (last_sec != DATE.time.seconds){
       
-      //decibel = sample_sum / (float) sample_num; // Average reading
+      decibel = sample_sum / (float) sample_num; // Average reading
 
       // Write to file
       File logFile = LittleFS.open(filename, FILE_APPEND);
@@ -93,8 +93,8 @@ void recording(){
       logFile.close();
 
       // Reset counters
-      // sample_sum = 0;
-      // sample_num = 0;
+      sample_sum = 0;
+      sample_num = 0;
       last_sec = DATE.time.seconds;
     }
 
