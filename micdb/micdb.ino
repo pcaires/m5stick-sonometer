@@ -29,7 +29,7 @@ static char filename[17];
 
 static m5::rtc_datetime_t DATE;
 
-static uint32_t min_timer = 3;
+//static uint32_t min_timer = 3;
 //static uint8_t min;
 
 /* TFT_state
@@ -44,6 +44,11 @@ static uint8_t TFT_state = 1;
 1 - rec
 */
 static uint8_t state = 0;
+
+// Recording variables
+uint8_t last_sec;
+//float sample_sum = 0;
+//uint8_t sample_num = 0;
 
 #define PIN_CLK  0
 #define PIN_DATA 34
@@ -72,14 +77,27 @@ float grabDB(){
 
 void recording(){
     float decibel = grabDB();
-    uint8_t ms = millis();
-
-    File logFile = LittleFS.open(filename, FILE_APPEND);
-    logFile.write((uint8_t*)&decibel, sizeof(decibel)); //4bytes
-    logFile.write((uint8_t*)&ms, sizeof(ms)); //1bytes
-    logFile.close();
-
     if (TFT_state) dispDB(decibel);
+
+    //sample_sum += decibel;
+    //sample_num += 1;
+
+    if (last_sec != DATE.time.seconds){
+      
+      //decibel = sample_sum / (float) sample_num; // Average reading
+
+      // Write to file
+      File logFile = LittleFS.open(filename, FILE_APPEND);
+      logFile.write((uint8_t*)&decibel, sizeof(decibel)); //4bytes
+      logFile.write((uint8_t*)&last_sec, sizeof(last_sec)); //1bytes
+      logFile.close();
+
+      // Reset counters
+      // sample_sum = 0;
+      // sample_num = 0;
+      last_sec = DATE.time.seconds;
+    }
+
 }
 
 void dispDB(float decibel){
@@ -158,6 +176,7 @@ void init_log(){
              year, month, day, hour, minute);
 
     File logFile = LittleFS.open(filename, FILE_WRITE);
+
     /*
     StickCP2.Display.setFont(&fonts::Font0);
     StickCP2.Display.setCursor(10, 100);  // Position the text
@@ -189,8 +208,6 @@ void init_log(){
 
 void setup_rec(){
   endserver();
-  WiFi.mode(WIFI_OFF);
-  btStop();
   init_log();
   //dispbset(1);
   //StickCP2.Display.writeCommand(TFT_DISPOFF);
@@ -263,6 +280,7 @@ void setup(void) {
     Serial.begin(115200);
     delay(500);
     DATE = StickCP2.Rtc.getDateTime();
+    last_sec = DATE.time.seconds;
 
     // Initialize LittleFS
     if(!LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED)){
@@ -280,8 +298,6 @@ void setup(void) {
 
 void loop(void) {
     StickCP2.update();
-    
-    //Log File
     DATE = StickCP2.Rtc.getDateTime();
 
     switch (state) {
@@ -300,7 +316,7 @@ void loop(void) {
         //rec_BtnA();
         recording();
         StickCP2.Power.setLed(0);
-        delay(900);
+        delay(100);
         StickCP2.Power.setLed(1);
         break;
       }
